@@ -1,9 +1,13 @@
 use std::collections::VecDeque;
 
 mod automaton;
+mod macros;
 mod state_generator;
 mod tree;
 mod type_defs;
+
+#[cfg(test)]
+mod tests;
 
 use automaton::Automaton;
 use state_generator::StateGenerator;
@@ -13,20 +17,24 @@ const EPS: char = 'ε';
 
 fn hierarchy(ch: char) -> u8 {
     match ch {
-        '(' | ')' => 0,
-        '|' => 1,
-        '·' => 2,
-        '*' => 3,
-        _ => 4,
+        '(' | ')' => 1,
+        '|' => 2,
+        '·' => 3,
+        '*' => 4,
+        _ => 0,
     }
 }
 
 fn is_operator(ch: &char) -> bool {
     let ch = *ch;
-    if ch == '|' || ch == '·' || ch == '*' {
+    if ch == '|' || ch == '·' || ch == '*' || ch == '(' || ch == ')' {
         return true;
     }
     return false;
+}
+
+fn is_alphabet(ch: &char) -> bool {
+    return !is_operator(ch);
 }
 
 fn parse_regex(r: &str) -> Node<char> {
@@ -88,8 +96,38 @@ fn build_tree(op_stack: &mut VecDeque<char>, tr_stack: &mut VecDeque<Node<char>>
     }
 }
 
-fn build_automaton(regex: &str) {
-    let tree = parse_regex(regex);
+fn add_implicit_concatenation(regex: &str) -> String {
+    let mut result = String::new();
+    let chars: Vec<char> = regex.chars().collect();
+
+    for i in 0..chars.len() {
+        let current = chars[i];
+        result.push(current);
+
+        // Check if we need to add implicit concatenation
+        if i < chars.len() - 1 {
+            let next = chars[i + 1];
+
+            let should_add_concat = match (current, next) {
+                (c1, c2) if is_alphabet(&c1) && is_alphabet(&c2) => true,
+                (')', '(') => true,
+                ('*', c) if is_alphabet(&c) => true,
+                ('*', '(') => true,
+                _ => false,
+            };
+            if should_add_concat {
+                result.push('·');
+            }
+        }
+    }
+
+    result
+}
+
+fn build_automaton(regex: &str) -> Automaton<char> {
+    let processed_regex = add_implicit_concatenation(regex);
+
+    let tree = parse_regex(&processed_regex);
     let mut post_order: Vec<char> = Vec::new();
     tree.post_order(&mut post_order);
 
@@ -174,16 +212,12 @@ fn build_automaton(regex: &str) {
     automaton.set_start(start);
     automaton.set_end(end);
 
-    // // Printing
-    // let mut automaton_keys: Vec<&StateNumber> = automaton.automaton.keys().collect();
-    // automaton_keys.sort();
-    // for key in automaton_keys {
-    //     println!("{}: {:?}", key, automaton.automaton.get(key).unwrap());
-    // }
+    return automaton;
 }
 
 fn main() {
-    // let temp_test = "(a*·(a|b)·b*)";
-    let temp_test = "(a|b*·c)";
-    build_automaton(temp_test);
+    let auromaton = build_automaton("(a|b)*c");
+    auromaton.print_states();
+    let temp = auromaton.parse("acbc");
+    println!("{:?}", temp);
 }
