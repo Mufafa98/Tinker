@@ -9,9 +9,11 @@ mod type_defs;
 #[cfg(test)]
 mod tests;
 
-use automaton::Automaton;
+use automaton::efa::EFA;
 use state_generator::StateGenerator;
 use tree::Node;
+
+use crate::{automaton::dfa::DFA, type_defs::State};
 
 const EPS: char = 'ε';
 
@@ -124,20 +126,20 @@ fn add_implicit_concatenation(regex: &str) -> String {
     result
 }
 
-fn build_automaton(regex: &str) -> Automaton<char> {
+fn build_automaton(regex: &str) -> EFA<char> {
     let processed_regex = add_implicit_concatenation(regex);
 
     let tree = parse_regex(&processed_regex);
     let mut post_order: Vec<char> = Vec::new();
     tree.post_order(&mut post_order);
 
-    let mut automaton: Automaton<char> = Automaton::new();
-    let mut state_generator: StateGenerator = StateGenerator::new();
+    let mut automaton: EFA<char> = EFA::new();
+    let mut state_generator: StateGenerator<usize, (State, State)> = StateGenerator::new();
     let mut tree_stack: VecDeque<usize> = VecDeque::new();
 
     for (pos, token) in post_order.iter().enumerate() {
         if !is_operator(token) {
-            let (i_state, f_state) = state_generator.generate_for(pos);
+            let (i_state, f_state) = state_generator.generate_for(&pos);
 
             automaton.transition(i_state, *token, f_state);
             automaton.empty_transition(f_state);
@@ -146,12 +148,12 @@ fn build_automaton(regex: &str) -> Automaton<char> {
         } else {
             match token {
                 '*' => {
-                    let (i_state, f_state) = state_generator.generate_for(pos);
+                    let (i_state, f_state) = state_generator.generate_for(&pos);
                     // child position
                     let child = tree_stack
                         .pop_back()
                         .expect("Operator \'*\' expected an operand");
-                    let (child_i, child_f) = state_generator.get_states(child);
+                    let (child_i, child_f) = state_generator.get_states(&child).unwrap();
 
                     automaton.transition(i_state, EPS, f_state);
                     automaton.transition(i_state, EPS, child_i);
@@ -162,7 +164,7 @@ fn build_automaton(regex: &str) -> Automaton<char> {
                     tree_stack.push_back(pos);
                 }
                 '|' => {
-                    let (i_state, f_state) = state_generator.generate_for(pos);
+                    let (i_state, f_state) = state_generator.generate_for(&pos);
                     let child_r = tree_stack
                         .pop_back()
                         .expect("Operator \'·\' expected two operands");
@@ -170,8 +172,8 @@ fn build_automaton(regex: &str) -> Automaton<char> {
                         .pop_back()
                         .expect("Operator \'·\' expected two operands");
 
-                    let (child_l_i, child_l_f) = state_generator.get_states(child_l);
-                    let (child_r_i, child_r_f) = state_generator.get_states(child_r);
+                    let (child_l_i, child_l_f) = state_generator.get_states(&child_l).unwrap();
+                    let (child_r_i, child_r_f) = state_generator.get_states(&child_r).unwrap();
 
                     automaton.transition(i_state, EPS, child_l_i);
                     automaton.transition(i_state, EPS, child_r_i);
@@ -191,10 +193,10 @@ fn build_automaton(regex: &str) -> Automaton<char> {
                         .pop_back()
                         .expect("Operator \'·\' expected two operands");
 
-                    let (child_l_i, child_l_f) = state_generator.get_states(child_l);
-                    let (child_r_i, child_r_f) = state_generator.get_states(child_r);
+                    let (child_l_i, child_l_f) = state_generator.get_states(&child_l).unwrap();
+                    let (child_r_i, child_r_f) = state_generator.get_states(&child_r).unwrap();
 
-                    state_generator.insert_with(pos, child_l_i, child_r_f);
+                    state_generator.insert_with(&pos, &(child_l_i, child_r_f));
 
                     automaton.transition(child_l_f, EPS, child_r_i);
 
@@ -208,7 +210,7 @@ fn build_automaton(regex: &str) -> Automaton<char> {
     let root_pos = tree_stack
         .pop_back()
         .expect("Root of the expression was not pushed to the stack");
-    let (start, end) = state_generator.get_states(root_pos);
+    let (start, end) = state_generator.get_states(&root_pos).unwrap();
     automaton.set_start(start);
     automaton.set_end(end);
 
@@ -216,8 +218,8 @@ fn build_automaton(regex: &str) -> Automaton<char> {
 }
 
 fn main() {
-    let auromaton = build_automaton("(a|b)*c");
-    auromaton.print_states();
-    let temp = auromaton.parse("acbc");
-    println!("{:?}", temp);
+    let efa_automaton = build_automaton("a|b*c");
+    efa_automaton.print();
+    // let dfa_automaton = DFA::from_nfa(&nfa_automaton);
+    // dfa_automaton.expect("Wrong Automaton").print();
 }

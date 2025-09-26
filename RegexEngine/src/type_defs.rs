@@ -1,1 +1,1 @@
-pub type StateNumber = u8;
+pub type State = u8;
