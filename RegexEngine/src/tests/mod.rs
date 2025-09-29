@@ -1,4 +1,5 @@
 // Module declarations for organized test files
+use crate::RegexParser;
 pub mod basic_tests;
 pub mod complex_tests;
 pub mod concatenation_tests;

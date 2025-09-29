@@ -4,11 +4,10 @@ use std::{
     fmt::Debug,
     hash::Hash,
 };
-
 pub struct EFA<T> {
-    automaton: HashMap<State, HashMap<T, Vec<State>>>,
-    start: Option<State>,
-    end: Option<State>,
+    pub(crate) automaton: HashMap<State, HashMap<Option<T>, Vec<State>>>,
+    pub(crate) start: Option<State>,
+    pub(crate) end: Option<State>,
 }
 
 impl<T: Eq + Hash + Debug> EFA<T> {
@@ -19,7 +18,7 @@ impl<T: Eq + Hash + Debug> EFA<T> {
             end: None,
         }
     }
-    pub fn transition(&mut self, i_state: State, input: T, f_state: State) {
+    pub fn transition(&mut self, i_state: State, input: Option<T>, f_state: State) {
         self.automaton
             .entry(i_state)
             .or_default()
@@ -38,10 +37,15 @@ impl<T: Eq + Hash + Debug> EFA<T> {
     }
 
     pub fn print(&self) {
-        println!("EFA Automaton");
-        println!("Start state: {:?}", self.start);
-        println!("End state: {:?}", self.end);
-        println!("Transitions:");
+        let start = self
+            .start
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "N/A".to_string());
+        let end = self
+            .end
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "N/A".to_string());
+        println!("EFA - Start {} - End {}", start, end);
 
         let mut sorted_states: Vec<_> = self.automaton.iter().collect();
         sorted_states.sort_by_key(|(state, _)| *state);
@@ -83,8 +87,24 @@ impl<T: Eq + Hash + Debug> EFA<T> {
     pub fn get_end(&self) -> Option<State> {
         self.end
     }
-    pub fn get_possible_transitions(&self, state: &State) -> Option<&HashMap<T, Vec<State>>> {
+
+    pub fn get_possible_transitions(
+        &self,
+        state: &State,
+    ) -> Option<&HashMap<Option<T>, Vec<State>>> {
         self.automaton.get(state)
+    }
+
+    pub fn closure(&self, state: State) -> Vec<State> {
+        let mut result: Vec<State> = vec![state];
+        if let Some(transitions) = self.automaton.get(&state) {
+            if let Some(eps_transitions) = transitions.get(&None) {
+                for transition in eps_transitions {
+                    result.extend_from_slice(&self.closure(*transition));
+                }
+            }
+        }
+        result
     }
 }
 impl EFA<char> {
@@ -118,9 +138,9 @@ impl EFA<char> {
         // Necessary for empty string that would be matched
         // by "a*" where a is a token from the alphabet
         if current_token.is_none() {
-            let eps_transition = possible_transitions.get(&EPS)?;
+            let eps_transition = possible_transitions.get(&None)?;
             for transition in eps_transition {
-                debug_println!("  {} --{:?}--> {:2} {}", state, EPS, transition, text);
+                debug_println!("  {} --{:?}--> {:2} {:?}", state, EPS, transition, text);
 
                 let result = self.recursive_parse(text, *transition);
                 if result.is_some() {
@@ -132,7 +152,7 @@ impl EFA<char> {
 
         let current_token = current_token.unwrap();
 
-        let direct_transitions = possible_transitions.get(&current_token);
+        let direct_transitions = possible_transitions.get(&Some(current_token));
         if direct_transitions.is_some() {
             let direct_transition = direct_transitions.unwrap();
             for transition in direct_transition {
@@ -152,7 +172,7 @@ impl EFA<char> {
             return None;
         }
 
-        let eps_transition = possible_transitions.get(&EPS)?;
+        let eps_transition = possible_transitions.get(&None)?;
         for transition in eps_transition {
             debug_println!("  {} --{:?}--> {:2} {}", state, EPS, transition, text);
             let result = self.recursive_parse(text, *transition);

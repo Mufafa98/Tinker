@@ -1,5 +1,5 @@
 use crate::type_defs::State;
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 pub trait StateGeneration {
     fn generate(counter: &mut State) -> Self;
@@ -29,8 +29,10 @@ pub struct StateGenerator<ValueType, ValueState> {
     state_counter: State,
 }
 
-impl<ValueType: Eq + Hash + Clone, ValueState: StateGeneration + Clone + Eq + Hash>
-    StateGenerator<ValueType, ValueState>
+impl<
+        ValueType: Eq + Hash + Clone + Debug,
+        ValueState: StateGeneration + Clone + Eq + Hash + Debug,
+    > StateGenerator<ValueType, ValueState>
 {
     pub fn new() -> Self {
         StateGenerator {
@@ -40,11 +42,17 @@ impl<ValueType: Eq + Hash + Clone, ValueState: StateGeneration + Clone + Eq + Ha
         }
     }
     pub fn generate_for(&mut self, value: &ValueType) -> ValueState {
-        let state = self.generate_return();
-
-        if self.states.insert(value.clone(), state.clone()).is_some() {
-            panic!("There shold not be the same value entered twice")
-        }
+        let state = {
+            if self.states.contains_key(value) {
+                return self.states.get(value).unwrap().clone();
+            } else {
+                let state = self.generate_return();
+                if self.states.insert(value.clone(), state.clone()).is_some() {
+                    panic!("There shold not be the same value entered twice")
+                }
+                state
+            }
+        };
 
         if self.values.insert(state.clone(), value.clone()).is_some() {
             panic!("An error occured. There should not be two states with equal values. Check your StateGeneration trait implementation")
