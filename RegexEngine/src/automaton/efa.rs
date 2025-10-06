@@ -1,9 +1,10 @@
-use crate::{debug_println, type_defs::State, EPS};
+use crate::{debug_println, type_defs::State, type_defs::EPS};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     hash::Hash,
 };
+#[derive(Clone)]
 pub struct EFA<T> {
     pub(crate) automaton: HashMap<State, HashMap<Option<T>, Vec<State>>>,
     pub(crate) start: Option<State>,

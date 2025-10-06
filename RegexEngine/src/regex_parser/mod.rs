@@ -1,3 +1,4 @@
+use crate::automaton::dfa::DFA;
 use crate::automaton::efa::EFA;
 use crate::state_generator::StateGenerator;
 use crate::tree::Node;
@@ -7,6 +8,7 @@ use std::collections::VecDeque;
 pub type RegexParser = GenericRegexParser<char>;
 
 pub struct GenericRegexParser<T> {
+    automaton: DFA<T>,
     efa: EFA<T>,
 }
 
@@ -18,7 +20,7 @@ impl GenericRegexParser<char> {
         let mut post_order: Vec<char> = Vec::new();
         tree.post_order(&mut post_order);
 
-        let mut automaton: EFA<char> = EFA::new();
+        let mut efa: EFA<char> = EFA::new();
         let mut state_generator: StateGenerator<usize, (State, State)> = StateGenerator::new();
         let mut tree_stack: VecDeque<usize> = VecDeque::new();
 
@@ -26,8 +28,8 @@ impl GenericRegexParser<char> {
             if !is_operator(token) {
                 let (i_state, f_state) = state_generator.generate_for(&pos);
 
-                automaton.transition(i_state, Some(*token), f_state);
-                automaton.empty_transition(f_state);
+                efa.transition(i_state, Some(*token), f_state);
+                efa.empty_transition(f_state);
 
                 tree_stack.push_back(pos);
             } else {
@@ -40,11 +42,11 @@ impl GenericRegexParser<char> {
                             .expect("Operator \'*\' expected an operand");
                         let (child_i, child_f) = state_generator.get_states(&child).unwrap();
 
-                        automaton.transition(i_state, None, f_state);
-                        automaton.transition(i_state, None, child_i);
+                        efa.transition(i_state, None, f_state);
+                        efa.transition(i_state, None, child_i);
 
-                        automaton.transition(child_f, None, f_state);
-                        automaton.transition(child_f, None, child_i);
+                        efa.transition(child_f, None, f_state);
+                        efa.transition(child_f, None, child_i);
 
                         tree_stack.push_back(pos);
                     }
@@ -60,13 +62,13 @@ impl GenericRegexParser<char> {
                         let (child_l_i, child_l_f) = state_generator.get_states(&child_l).unwrap();
                         let (child_r_i, child_r_f) = state_generator.get_states(&child_r).unwrap();
 
-                        automaton.transition(i_state, None, child_l_i);
-                        automaton.transition(i_state, None, child_r_i);
+                        efa.transition(i_state, None, child_l_i);
+                        efa.transition(i_state, None, child_r_i);
 
-                        automaton.transition(child_l_f, None, f_state);
-                        automaton.transition(child_r_f, None, f_state);
+                        efa.transition(child_l_f, None, f_state);
+                        efa.transition(child_r_f, None, f_state);
 
-                        automaton.empty_transition(f_state);
+                        efa.empty_transition(f_state);
 
                         tree_stack.push_back(pos);
                     }
@@ -83,7 +85,7 @@ impl GenericRegexParser<char> {
 
                         state_generator.insert_with(&pos, &(child_l_i, child_r_f));
 
-                        automaton.transition(child_l_f, None, child_r_i);
+                        efa.transition(child_l_f, None, child_r_i);
 
                         tree_stack.push_back(pos);
                     }
@@ -96,16 +98,23 @@ impl GenericRegexParser<char> {
             .pop_back()
             .expect("Root of the expression was not pushed to the stack");
         let (start, end) = state_generator.get_states(&root_pos).unwrap();
-        automaton.set_start(start);
-        automaton.set_end(end);
+        efa.set_start(start);
+        efa.set_end(end);
 
-        return GenericRegexParser { efa: automaton };
+        let dfa = DFA::from_efa(&efa.clone()).unwrap();
+        // let automaton = dfa;
+        let automaton = DFA::minimize_from(dfa).unwrap();
+        // automaton.print();
+        return GenericRegexParser { automaton, efa };
     }
     pub fn parse(&self, text: &str) -> Option<usize> {
-        self.efa.parse(text)
+        self.automaton.parse(text)
     }
-    pub fn get_automaton_temp(self) -> EFA<char> {
+    pub fn get_efa_temp(self) -> EFA<char> {
         return self.efa;
+    }
+    pub fn get_dfa_temp(&self) -> DFA<char> {
+        return self.automaton.clone();
     }
 }
 

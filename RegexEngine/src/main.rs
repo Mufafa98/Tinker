@@ -8,16 +8,12 @@ mod type_defs;
 #[cfg(test)]
 mod tests;
 
-use crate::{automaton::dfa::DFA, automaton::nfa::NFA, regex_parser::RegexParser};
+use crate::regex_parser::RegexParser;
 
-const EPS: char = 'ε';
 fn main() {
-    let automaton: RegexParser = RegexParser::from("a|b*c");
-    automaton.parse("asd");
-    let efa = automaton.get_automaton_temp();
-    efa.print();
-    let nfa = NFA::from_efa(&efa).unwrap();
-    nfa.print();
-    let dfa = DFA::from_efa(&efa).unwrap();
-    dfa.print();
+    let parser = RegexParser::from("(a|b)*");
+    println!("{:?} {:?}", parser.parse("ababab"), Some(0));
+    println!("{:?} {:?}", parser.parse("aaaaaa"), Some(0));
+    println!("{:?} {:?}", parser.parse("bbbbbb"), Some(0));
+    println!("{:?} {:?}", parser.parse("c"), Some(0)); // matches empty string
 }
